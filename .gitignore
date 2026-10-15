@@ -1,0 +1,26 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# PyInstaller build outputs (Upload .exe to GitHub Releases instead)
+build/
+dist/
+*.spec.bak
+
+# Audio recordings / scratch files
+recordedFile.wav
+*.wav
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/

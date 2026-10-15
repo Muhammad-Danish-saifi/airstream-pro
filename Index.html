@@ -1,0 +1,1126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>AirStream Pro - Real-Time PC Audio to AirPods</title>
+  <meta name="description" content="Ultra-low latency real-time PC audio streamer to phone and AirPods over local network using WebRTC and WebSockets.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+
+  <style>
+    :root {
+      --bg-dark: #0a0c14;
+      --bg-card: rgba(18, 22, 36, 0.75);
+      --bg-card-border: rgba(255, 255, 255, 0.08);
+      --accent-cyan: #00f2fe;
+      --accent-blue: #4facfe;
+      --accent-purple: #9d4edd;
+      --accent-green: #00f59b;
+      --accent-red: #ff3366;
+      --accent-gold: #ffb703;
+      --text-main: #f0f4fc;
+      --text-muted: #8b9bb4;
+      --radius-lg: 20px;
+      --radius-md: 14px;
+      --radius-sm: 8px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-dark);
+      background-image: 
+        radial-gradient(circle at 15% 15%, rgba(0, 242, 254, 0.12) 0%, transparent 40%),
+        radial-gradient(circle at 85% 85%, rgba(157, 78, 221, 0.12) 0%, transparent 40%),
+        radial-gradient(circle at 50% 50%, rgba(10, 12, 20, 0.95) 0%, #06080e 100%);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px;
+      overflow-x: hidden;
+    }
+
+    .app-container {
+      width: 100%;
+      max-width: 580px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* Header */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 4px;
+    }
+
+    .logo-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo-icon {
+      width: 44px;
+      height: 44px;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 20px rgba(0, 242, 254, 0.3);
+      font-size: 22px;
+    }
+
+    .logo-text h1 {
+      font-size: 1.35rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      background: linear-gradient(90deg, #ffffff, #a5b4fc);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .logo-text p {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .badge-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 30px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--bg-card-border);
+      backdrop-filter: blur(8px);
+    }
+
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      transition: background 0.3s ease;
+    }
+
+    .badge-status.connected .pulse-dot {
+      background: var(--accent-green);
+      box-shadow: 0 0 10px var(--accent-green);
+      animation: pulse 1.6s infinite;
+    }
+
+    .badge-status.streaming .pulse-dot {
+      background: var(--accent-cyan);
+      box-shadow: 0 0 12px var(--accent-cyan);
+      animation: pulse 1s infinite;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(0.9); opacity: 0.8; }
+      50% { transform: scale(1.3); opacity: 1; }
+      100% { transform: scale(0.9); opacity: 0.8; }
+    }
+
+    /* Cards */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--bg-card-border);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+    }
+
+    /* Latency Hero Meter */
+    .hero-stat-card {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      padding: 16px 20px;
+      background: linear-gradient(135deg, rgba(25, 32, 54, 0.7), rgba(16, 20, 36, 0.8));
+    }
+
+    .stat-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .stat-label {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    .stat-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.6rem;
+      font-weight: 700;
+      display: flex;
+      align-items: baseline;
+      gap: 4px;
+      color: #fff;
+    }
+
+    .stat-value.latency-ultra {
+      color: var(--accent-green);
+      text-shadow: 0 0 16px rgba(0, 245, 155, 0.35);
+    }
+
+    .stat-value.latency-good {
+      color: var(--accent-cyan);
+    }
+
+    .stat-value.latency-warn {
+      color: var(--accent-gold);
+    }
+
+    .stat-unit {
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--text-muted);
+    }
+
+    /* Visualizer */
+    .visualizer-container {
+      position: relative;
+      width: 100%;
+      height: 90px;
+      background: rgba(0, 0, 0, 0.35);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      margin-bottom: 8px;
+    }
+
+    canvas#visualizer {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .vu-meter-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .vu-track {
+      flex: 1;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 4px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .vu-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--accent-cyan), var(--accent-green) 70%, var(--accent-red));
+      transition: width 0.05s linear;
+      border-radius: 4px;
+    }
+
+    .vu-label {
+      font-size: 0.7rem;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-muted);
+      width: 32px;
+    }
+
+    /* Main Action Button */
+    .btn-stream {
+      width: 100%;
+      padding: 18px 24px;
+      border: none;
+      border-radius: 18px;
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      box-shadow: 0 8px 24px rgba(0, 242, 254, 0.25);
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
+      color: #040914;
+    }
+
+    .btn-stream:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 32px rgba(0, 242, 254, 0.4);
+    }
+
+    .btn-stream:active {
+      transform: translateY(1px);
+    }
+
+    .btn-stream.active {
+      background: linear-gradient(135deg, var(--accent-red), #e63946);
+      color: #fff;
+      box-shadow: 0 8px 24px rgba(255, 51, 102, 0.3);
+    }
+
+    /* Protocol Tabs */
+    .protocol-tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      background: rgba(0, 0, 0, 0.3);
+      padding: 4px;
+      border-radius: var(--radius-md);
+      margin-bottom: 12px;
+    }
+
+    .protocol-btn {
+      padding: 10px 12px;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      font-family: 'Outfit', sans-serif;
+      font-weight: 600;
+      font-size: 0.85rem;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    }
+
+    .protocol-btn span.tag {
+      font-size: 0.65rem;
+      color: var(--accent-green);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .protocol-btn.active {
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    }
+
+    /* Device Selector & Controls */
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .control-label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    select.input-select {
+      width: 100%;
+      padding: 12px 14px;
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid var(--bg-card-border);
+      color: var(--text-main);
+      font-family: 'Outfit', sans-serif;
+      font-size: 0.9rem;
+      border-radius: var(--radius-sm);
+      outline: none;
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238b9bb4' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+      background-repeat: no-repeat;
+      background-position: right 14px center;
+      background-size: 16px;
+    }
+
+    select.input-select:focus {
+      border-color: var(--accent-cyan);
+    }
+
+    /* Volume Slider */
+    .volume-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 6px;
+    }
+
+    .slider {
+      flex: 1;
+      height: 6px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: rgba(255, 255, 255, 0.12);
+      border-radius: 4px;
+      outline: none;
+    }
+
+    .slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--accent-cyan);
+      box-shadow: 0 0 10px rgba(0, 242, 254, 0.6);
+      cursor: pointer;
+    }
+
+    .btn-icon {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid var(--bg-card-border);
+      color: var(--text-main);
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 16px;
+    }
+
+    /* Desktop QR card */
+    .desktop-qr-card {
+      display: none;
+      text-align: center;
+      padding: 16px;
+      background: rgba(14, 18, 30, 0.6);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--bg-card-border);
+      margin-top: 10px;
+    }
+
+    @media (min-width: 640px) {
+      .desktop-qr-card {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        text-align: left;
+      }
+    }
+
+    #qrcode {
+      background: #fff;
+      padding: 8px;
+      border-radius: 10px;
+      display: inline-block;
+      width: 88px;
+      height: 88px;
+      flex-shrink: 0;
+    }
+
+    #qrcode img {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .qr-info h4 {
+      font-size: 0.95rem;
+      margin-bottom: 4px;
+      font-weight: 600;
+    }
+
+    .qr-info p {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+
+    .qr-info a {
+      color: var(--accent-cyan);
+      text-decoration: none;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      word-break: break-all;
+    }
+
+    /* AirPods Quick Setup Tips */
+    .tips-box {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px dashed rgba(255, 255, 255, 0.1);
+      border-radius: var(--radius-md);
+      padding: 12px 14px;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .tips-box strong {
+      color: var(--text-main);
+    }
+
+    footer {
+      text-align: center;
+      font-size: 0.7rem;
+      color: rgba(255, 255, 255, 0.3);
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="app-container">
+    <!-- Header -->
+    <header>
+      <div class="logo-group">
+        <div class="logo-icon">🎧</div>
+        <div class="logo-text">
+          <h1>AirStream Pro</h1>
+          <p>PC Audio to Phone / AirPods</p>
+        </div>
+      </div>
+      <div id="statusBadge" class="badge-status">
+        <div class="pulse-dot"></div>
+        <span id="statusText">Ready</span>
+      </div>
+    </header>
+
+    <!-- Latency & Stats Dashboard -->
+    <div class="card hero-stat-card">
+      <div class="stat-item">
+        <div class="stat-label">Live Latency</div>
+        <div class="stat-value latency-ultra" id="latencyDisplay">
+          <span id="latencyNum">--</span>
+          <span class="stat-unit">ms</span>
+        </div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">Stream Quality</div>
+        <div class="stat-value" id="qualityDisplay">
+          <span id="qualityText">48 kHz</span>
+          <span class="stat-unit" id="qualityMode">Stereo</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Audio Engine Card -->
+    <div class="card">
+      <!-- Protocol Switcher -->
+      <div class="protocol-tabs">
+        <button id="protoWebrtc" class="protocol-btn active">
+          WebRTC (UDP)
+          <span class="tag">⚡ ~20ms Latency</span>
+        </button>
+        <button id="protoWs" class="protocol-btn">
+          WebSocket (TCP)
+          <span class="tag">⏱ ~35ms Adaptive</span>
+        </button>
+      </div>
+
+      <!-- Live Audio Waveform & VU Meter -->
+      <div class="visualizer-container">
+        <canvas id="visualizer"></canvas>
+      </div>
+      <div class="vu-meter-bar">
+        <span class="vu-label">L/R</span>
+        <div class="vu-track">
+          <div id="vuFill" class="vu-fill"></div>
+        </div>
+        <span class="vu-label" id="vuText">-∞ dB</span>
+      </div>
+
+      <!-- Big Connect Button -->
+      <div style="margin-top: 18px;">
+        <button id="streamBtn" class="btn-stream">
+          <span id="btnIcon">▶</span>
+          <span id="btnText">Connect & Listen</span>
+        </button>
+      </div>
+
+      <!-- Volume & Boost Slider -->
+      <div class="control-group">
+        <div class="control-label">
+          <span>AirPods Volume & Boost</span>
+          <span id="volPercent" style="font-family:'JetBrains Mono',monospace;">100%</span>
+        </div>
+        <div class="volume-row">
+          <button id="muteBtn" class="btn-icon">🔊</button>
+          <input type="range" id="volSlider" class="slider" min="0" max="200" value="100">
+        </div>
+      </div>
+
+      <!-- Audio Source Device Selector -->
+      <div class="control-group">
+        <div class="control-label">
+          <span>PC Sound Capture Source</span>
+          <span id="activeDeviceBadge" style="color:var(--accent-cyan); font-size:0.75rem;">Detecting...</span>
+        </div>
+        <select id="deviceSelect" class="input-select">
+          <option value="">Loading sound devices...</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Quick Scan for Phone (Visible on Desktop) -->
+    <div class="card desktop-qr-card" id="qrCard">
+      <div id="qrcode"></div>
+      <div class="qr-info">
+        <h4>📱 Open on your iPhone / Android</h4>
+        <p>Connect your AirPods to your phone, then scan this QR code or navigate to:</p>
+        <a id="qrUrlLink" href="#" target="_blank">http://...</a>
+      </div>
+    </div>
+
+    <!-- Tips Box -->
+    <div class="tips-box">
+      🌟 <strong>Zero-Configuration PC Audio:</strong> <strong>PC Audio (What You Hear)</strong> is selected by default! You do not need to install VB-Cable or change Windows settings. Just leave your normal PC speakers as default, put on your AirPods, and tap <strong>Connect & Listen</strong>.
+    </div>
+
+    <footer>
+      AirStream Pro • Ultra-Low-Latency WebRTC & WebAudio • 48 kHz High Fidelity
+    </footer>
+  </div>
+
+  <!-- Hidden WebRTC Audio Element for iOS background playback -->
+  <audio id="webrtcAudio" autoplay playsinline style="display:none;"></audio>
+
+  <script>
+    // App State
+    let isStreaming = false;
+    let selectedProtocol = 'webrtc'; // 'webrtc' or 'ws'
+    let audioCtx = null;
+    let gainNode = null;
+    let analyserNode = null;
+    let pc = null;
+    let ws = null;
+    let pingInterval = null;
+    let statsInterval = null;
+    let animFrame = null;
+    let currentVolume = 1.0;
+    let isMuted = false;
+
+    // Elements
+    const streamBtn = document.getElementById('streamBtn');
+    const btnIcon = document.getElementById('btnIcon');
+    const btnText = document.getElementById('btnText');
+    const statusBadge = document.getElementById('statusBadge');
+    const statusText = document.getElementById('statusText');
+    const latencyNum = document.getElementById('latencyNum');
+    const latencyDisplay = document.getElementById('latencyDisplay');
+    const qualityText = document.getElementById('qualityText');
+    const qualityMode = document.getElementById('qualityMode');
+    const protoWebrtc = document.getElementById('protoWebrtc');
+    const protoWs = document.getElementById('protoWs');
+    const deviceSelect = document.getElementById('deviceSelect');
+    const activeDeviceBadge = document.getElementById('activeDeviceBadge');
+    const volSlider = document.getElementById('volSlider');
+    const volPercent = document.getElementById('volPercent');
+    const muteBtn = document.getElementById('muteBtn');
+    const webrtcAudio = document.getElementById('webrtcAudio');
+    const canvas = document.getElementById('visualizer');
+    const ctx = canvas.getContext('2d');
+    const vuFill = document.getElementById('vuFill');
+    const vuText = document.getElementById('vuText');
+
+    // Visualizer Canvas setup
+    function resizeCanvas() {
+      canvas.width = canvas.parentElement.clientWidth * window.devicePixelRatio;
+      canvas.height = canvas.parentElement.clientHeight * window.devicePixelRatio;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    // Protocol Tabs
+    protoWebrtc.onclick = () => {
+      if (selectedProtocol === 'webrtc') return;
+      selectedProtocol = 'webrtc';
+      protoWebrtc.classList.add('active');
+      protoWs.classList.remove('active');
+      if (isStreaming) restartStream();
+    };
+
+    protoWs.onclick = () => {
+      if (selectedProtocol === 'ws') return;
+      selectedProtocol = 'ws';
+      protoWs.classList.add('active');
+      protoWebrtc.classList.remove('active');
+      if (isStreaming) restartStream();
+    };
+
+    // Volume Slider
+    volSlider.oninput = () => {
+      const val = parseInt(volSlider.value);
+      volPercent.textContent = `${val}%`;
+      currentVolume = val / 100.0;
+      if (gainNode) {
+        gainNode.gain.setValueAtTime(isMuted ? 0 : currentVolume, audioCtx.currentTime);
+      }
+      if (webrtcAudio) {
+        webrtcAudio.volume = Math.min(1.0, currentVolume);
+      }
+    };
+
+    muteBtn.onclick = () => {
+      isMuted = !isMuted;
+      muteBtn.textContent = isMuted ? '🔇' : '🔊';
+      if (gainNode) {
+        gainNode.gain.setValueAtTime(isMuted ? 0 : currentVolume, audioCtx.currentTime);
+      }
+      if (webrtcAudio) {
+        webrtcAudio.muted = isMuted;
+      }
+    };
+
+    // Initialize Web Audio Context
+    function initWebAudio() {
+      if (!audioCtx) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        audioCtx = new AudioContextClass({
+          latencyHint: 'interactive',
+          sampleRate: 48000
+        });
+
+        gainNode = audioCtx.createGain();
+        gainNode.gain.setValueAtTime(isMuted ? 0 : currentVolume, audioCtx.currentTime);
+
+        analyserNode = audioCtx.createAnalyser();
+        analyserNode.fftSize = 64;
+        analyserNode.smoothingTimeConstant = 0.8;
+
+        gainNode.connect(analyserNode);
+        analyserNode.connect(audioCtx.destination);
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+    }
+
+    // MediaSession for Lock Screen & AirPods Controls
+    function setupMediaSession() {
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: 'AirStream Pro (PC Audio)',
+          artist: 'Real-Time Stream',
+          album: 'AirPods Low-Latency'
+        });
+        navigator.mediaSession.setActionHandler('play', () => startStream());
+        navigator.mediaSession.setActionHandler('pause', () => stopStream());
+        navigator.mediaSession.playbackState = 'playing';
+      }
+    }
+
+    // Fetch Audio Devices and System Info
+    async function fetchDevices() {
+      try {
+        const res = await fetch('/api/devices');
+        const data = await res.json();
+        deviceSelect.innerHTML = '';
+        data.devices.forEach(d => {
+          const opt = document.createElement('option');
+          opt.value = d.index;
+          let label = d.name;
+          if (d.isLoopback || d.isDefault) {
+            label = '🌟 ' + d.name + ' [RECOMMENDED]';
+          }
+          opt.textContent = label;
+          if (d.index === data.selectedDeviceIndex) opt.selected = true;
+          deviceSelect.appendChild(opt);
+        });
+        activeDeviceBadge.textContent = data.selectedDeviceName || 'Active';
+      } catch (err) {
+        console.warn('Failed to fetch devices:', err);
+      }
+    }
+
+    // Change PC Audio Device
+    deviceSelect.onchange = async () => {
+      const idx = parseInt(deviceSelect.value);
+      activeDeviceBadge.textContent = 'Switching...';
+      try {
+        const res = await fetch('/api/device/select', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ device_index: idx, channels: 2, sample_rate: 48000 })
+        });
+        const data = await res.json();
+        if (data.success) {
+          activeDeviceBadge.textContent = data.status.deviceName;
+        }
+      } catch (err) {
+        activeDeviceBadge.textContent = 'Error';
+      }
+    };
+
+    // QR Code Generation for Desktop View
+    async function setupQRCode() {
+      try {
+        const res = await fetch('/api/info');
+        const info = await res.json();
+        const url = info.url || window.location.href;
+        const link = document.getElementById('qrUrlLink');
+        link.textContent = url;
+        link.href = url;
+
+        // Generate QR code using qrcode-generator
+        if (typeof qrcode !== 'undefined') {
+          const qr = qrcode(0, 'M');
+          qr.addData(url);
+          qr.make();
+          document.getElementById('qrcode').innerHTML = qr.createImgTag(3, 4);
+        }
+      } catch (err) {
+        console.warn('Failed info/QR fetch:', err);
+      }
+    }
+
+    // Visualizer Loop
+    function startVisualizer() {
+      const bufferLength = analyserNode ? analyserNode.frequencyBinCount : 32;
+      const dataArray = new Uint8Array(bufferLength);
+
+      function draw() {
+        animFrame = requestAnimationFrame(draw);
+        const w = canvas.width;
+        const h = canvas.height;
+        ctx.clearRect(0, 0, w, h);
+
+        if (analyserNode && isStreaming) {
+          analyserNode.getByteFrequencyData(dataArray);
+
+          // Calculate average energy for VU meter
+          let sum = 0;
+          for (let i = 0; i < bufferLength; i++) {
+            sum += dataArray[i];
+          }
+          const avg = sum / bufferLength;
+          const vuPercent = Math.min(100, Math.round((avg / 255) * 125));
+          vuFill.style.width = `${vuPercent}%`;
+          
+          if (vuPercent > 2) {
+            const db = Math.round(20 * Math.log10(avg / 255));
+            vuText.textContent = `${db} dB`;
+          } else {
+            vuText.textContent = '-∞ dB';
+          }
+
+          // Draw neon spectrum bars
+          const barWidth = (w / bufferLength) * 1.5;
+          let x = 0;
+
+          for (let i = 0; i < bufferLength; i++) {
+            const barHeight = (dataArray[i] / 255) * h * 0.88;
+            const grad = ctx.createLinearGradient(0, h, 0, 0);
+            grad.addColorStop(0, 'rgba(0, 242, 254, 0.2)');
+            grad.addColorStop(0.7, '#00f2fe');
+            grad.addColorStop(1, '#9d4edd');
+
+            ctx.fillStyle = grad;
+            ctx.shadowColor = '#00f2fe';
+            ctx.shadowBlur = 8;
+            ctx.fillRect(x, h - barHeight, barWidth - 2, barHeight);
+            x += barWidth;
+          }
+        } else {
+          // Idle ambient wave
+          vuFill.style.width = '0%';
+          vuText.textContent = '-∞ dB';
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(0, h / 2);
+          ctx.lineTo(w, h / 2);
+          ctx.stroke();
+        }
+      }
+      draw();
+    }
+
+    // Update latency styling based on threshold
+    function updateLatencyDisplay(ms) {
+      latencyNum.textContent = ms;
+      latencyDisplay.className = 'stat-value ' + (ms <= 30 ? 'latency-ultra' : ms <= 65 ? 'latency-good' : 'latency-warn');
+    }
+
+    // ----------------- WebRTC Mode -----------------
+    async function startWebRTC() {
+      pc = new RTCPeerConnection({
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' }
+        ]
+      });
+
+      pc.addTransceiver('audio', { direction: 'recvonly' });
+
+      pc.ontrack = (event) => {
+        console.log('WebRTC audio track received');
+        webrtcAudio.srcObject = event.streams[0];
+        webrtcAudio.volume = Math.min(1.0, currentVolume);
+        webrtcAudio.muted = isMuted;
+        webrtcAudio.play().catch(e => console.warn('WebRTC play deferred:', e));
+
+        try {
+          if (audioCtx) {
+            const streamSource = audioCtx.createMediaStreamSource(event.streams[0]);
+            streamSource.connect(gainNode);
+          }
+        } catch (err) {
+          console.warn('AudioContext stream source:', err);
+        }
+      };
+
+      pc.onconnectionstatechange = () => {
+        console.log('WebRTC State:', pc.connectionState);
+        if (pc.connectionState === 'connected') {
+          statusBadge.className = 'badge-status streaming';
+          statusText.textContent = 'Live (UDP)';
+        } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+          statusBadge.className = 'badge-status';
+          statusText.textContent = 'Reconnecting...';
+        }
+      };
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+
+      // Wait for local ICE candidates gathering
+      await new Promise(resolve => {
+        if (pc.iceGatheringState === 'complete') {
+          resolve();
+        } else {
+          const check = () => {
+            if (pc.iceGatheringState === 'complete') {
+              pc.removeEventListener('icegatheringstatechange', check);
+              resolve();
+            }
+          };
+          pc.addEventListener('icegatheringstatechange', check);
+          setTimeout(resolve, 600); // 600ms fallback
+        }
+      });
+
+      const res = await fetch('/api/webrtc/offer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sdp: pc.localDescription.sdp,
+          type: pc.localDescription.type
+        })
+      });
+
+      if (!res.ok) throw new Error('WebRTC signaling failed');
+      const answer = await res.json();
+      await pc.setRemoteDescription(new RTCSessionDescription(answer));
+
+      // Monitor WebRTC Stats for RTT Latency
+      statsInterval = setInterval(async () => {
+        if (!pc || pc.connectionState === 'closed') return;
+        try {
+          const stats = await pc.getStats();
+          stats.forEach(report => {
+            if (report.type === 'candidate-pair' && report.state === 'succeeded') {
+              if (report.currentRoundTripTime !== undefined) {
+                const rtt = Math.round(report.currentRoundTripTime * 1000);
+                updateLatencyDisplay(rtt);
+              }
+            }
+          });
+        } catch (e) {}
+      }, 1000);
+    }
+
+    // ----------------- WebSocket Real-Time Mode -----------------
+    async function startWebSocket() {
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${proto}//${location.host}/ws/audio`;
+
+      ws = new WebSocket(wsUrl);
+      ws.binaryType = 'arraybuffer';
+
+      let sampleRate = 48000;
+      let channels = 2;
+      let nextPlayTime = 0;
+      const TARGET_BUFFER = 0.030; // 30ms ultra-low jitter target
+
+      ws.onopen = () => {
+        console.log('WebSocket connected');
+        statusBadge.className = 'badge-status streaming';
+        statusText.textContent = 'Live (WS)';
+
+        // Periodic Ping for RTT measurement
+        pingInterval = setInterval(() => {
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'ping', t: performance.now() }));
+          }
+        }, 1000);
+      };
+
+      ws.onmessage = (event) => {
+        if (typeof event.data === 'string') {
+          try {
+            const msg = JSON.parse(event.data);
+            if (msg.type === 'config') {
+              sampleRate = msg.sampleRate;
+              channels = msg.channels;
+              qualityText.textContent = `${Math.round(sampleRate / 1000)} kHz`;
+              qualityMode.textContent = channels === 2 ? 'Stereo' : 'Mono';
+            } else if (msg.type === 'pong') {
+              const rtt = Math.round(performance.now() - msg.t);
+              updateLatencyDisplay(rtt);
+            }
+          } catch (e) {}
+          return;
+        }
+
+        // Binary PCM frames
+        const int16 = new Int16Array(event.data);
+        const numFrames = int16.length / channels;
+        if (numFrames <= 0) return;
+
+        const left = new Float32Array(numFrames);
+        const right = channels === 2 ? new Float32Array(numFrames) : left;
+
+        if (channels === 2) {
+          for (let i = 0; i < numFrames; i++) {
+            left[i] = int16[i * 2] / 32768.0;
+            right[i] = int16[i * 2 + 1] / 32768.0;
+          }
+        } else {
+          for (let i = 0; i < numFrames; i++) {
+            left[i] = int16[i] / 32768.0;
+          }
+        }
+
+        const now = audioCtx.currentTime;
+        if (nextPlayTime < now + 0.012) {
+          // Reset buffer on startup or underrun
+          nextPlayTime = now + TARGET_BUFFER;
+        } else if (nextPlayTime > now + 0.080) {
+          // Snap back if network jitter queued >80ms
+          nextPlayTime = now + TARGET_BUFFER;
+        }
+
+        const buffer = audioCtx.createBuffer(channels, numFrames, sampleRate);
+        buffer.copyToChannel(left, 0);
+        if (channels === 2) {
+          buffer.copyToChannel(right, 1);
+        }
+
+        const source = audioCtx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(gainNode);
+        source.start(nextPlayTime);
+
+        nextPlayTime += numFrames / sampleRate;
+      };
+
+      ws.onerror = (err) => {
+        console.warn('WebSocket error:', err);
+      };
+
+      ws.onclose = () => {
+        console.log('WebSocket closed');
+        if (isStreaming) {
+          statusBadge.className = 'badge-status';
+          statusText.textContent = 'Disconnected';
+        }
+      };
+    }
+
+    // ----------------- Stream Lifecycle -----------------
+    async function startStream() {
+      try {
+        initWebAudio();
+        setupMediaSession();
+
+        btnText.textContent = 'Connecting...';
+        statusText.textContent = 'Connecting...';
+
+        if (selectedProtocol === 'webrtc') {
+          await startWebRTC();
+        } else {
+          await startWebSocket();
+        }
+
+        isStreaming = true;
+        streamBtn.classList.add('active');
+        btnIcon.textContent = '⏹';
+        btnText.textContent = 'Stop Listening';
+        statusBadge.className = 'badge-status streaming';
+
+      } catch (err) {
+        console.error('Failed to start stream:', err);
+        alert('Could not start stream: ' + err.message);
+        stopStream();
+      }
+    }
+
+    function stopStream() {
+      isStreaming = false;
+      streamBtn.classList.remove('active');
+      btnIcon.textContent = '▶';
+      btnText.textContent = 'Connect & Listen';
+      statusBadge.className = 'badge-status';
+      statusText.textContent = 'Ready';
+      latencyNum.textContent = '--';
+
+      if (pingInterval) { clearInterval(pingInterval); pingInterval = null; }
+      if (statsInterval) { clearInterval(statsInterval); statsInterval = null; }
+
+      if (pc) {
+        try { pc.close(); } catch (e) {}
+        pc = null;
+      }
+      if (ws) {
+        try { ws.close(); } catch (e) {}
+        ws = null;
+      }
+      if (webrtcAudio) {
+        webrtcAudio.pause();
+        webrtcAudio.srcObject = null;
+      }
+    }
+
+    async function restartStream() {
+      stopStream();
+      await new Promise(r => setTimeout(r, 200));
+      startStream();
+    }
+
+    streamBtn.onclick = () => {
+      if (isStreaming) {
+        stopStream();
+      } else {
+        startStream();
+      }
+    };
+
+    // Initialize
+    fetchDevices();
+    setupQRCode();
+    startVisualizer();
+  </script>
+</body>
+</html>
