@@ -82,14 +82,14 @@ Ever faced one of these frustrating situations?
 ## 🚀 Quick Start Guide
 
 ### Option 1: Standalone `.exe` (No Python Needed)
-1. Download **`AirStreamPro.exe`** from the [GitHub Releases](https://github.com/your-username/airstream-pro/releases) tab.
+1. Download **`AirStreamPro.exe`** from the [GitHub Releases](https://github.com/Muhammad-Danish-saifi/airstream-pro/releases) tab.
 2. Double-click `AirStreamPro.exe`. A headphone icon will appear in your Windows System Tray (near the clock).
 3. The dashboard will automatically open in your browser displaying your **QR Code**.
 
 ### Option 2: Run From Source (Developers)
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/airstream-pro.git
+git clone https://github.com/Muhammad-Danish-saifi/airstream-pro.git
 cd airstream-pro
 
 # Install dependencies
