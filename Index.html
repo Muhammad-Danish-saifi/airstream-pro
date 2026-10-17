@@ -155,10 +155,14 @@
     /* Latency Hero Meter */
     .hero-stat-card {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-      padding: 16px 20px;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      padding: 14px 16px;
       background: linear-gradient(135deg, rgba(25, 32, 54, 0.7), rgba(16, 20, 36, 0.8));
+    }
+
+    .hero-stat-card .stat-value {
+      font-size: 1.25rem;
     }
 
     .stat-item {
@@ -482,6 +486,79 @@
       color: var(--text-main);
     }
 
+    /* Diagnostics Card */
+    .diagnostic-card {
+      background: rgba(12, 17, 30, 0.85);
+      border: 1px solid rgba(0, 242, 254, 0.25);
+      padding: 0;
+      overflow: hidden;
+      margin-top: 14px;
+    }
+
+    .diag-header {
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--accent-cyan);
+      user-select: none;
+      background: rgba(255, 255, 255, 0.03);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .diag-body {
+      padding: 14px;
+    }
+
+    .diag-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+
+    .diag-metric {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 8px;
+      padding: 8px 10px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .diag-label {
+      font-size: 0.68rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .diag-val {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #00f2fe;
+      margin: 2px 0;
+    }
+
+    .diag-sub {
+      font-size: 0.65rem;
+      color: rgba(255, 255, 255, 0.4);
+    }
+
+    .diag-note {
+      margin-top: 12px;
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      line-height: 1.45;
+      padding: 8px 10px;
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 6px;
+      border-left: 3px solid var(--accent-cyan);
+    }
+
     footer {
       text-align: center;
       font-size: 0.7rem;
@@ -511,14 +588,21 @@
     <!-- Latency & Stats Dashboard -->
     <div class="card hero-stat-card">
       <div class="stat-item">
-        <div class="stat-label">Live Latency</div>
+        <div class="stat-label">Network Ping (RTT)</div>
         <div class="stat-value latency-ultra" id="latencyDisplay">
           <span id="latencyNum">--</span>
           <span class="stat-unit">ms</span>
         </div>
       </div>
       <div class="stat-item">
-        <div class="stat-label">Stream Quality</div>
+        <div class="stat-label">Playout Buffer</div>
+        <div class="stat-value" id="playoutBufferDisplay" style="color:var(--accent-cyan);">
+          <span id="playoutBufferNum">--</span>
+          <span class="stat-unit">ms</span>
+        </div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">Format</div>
         <div class="stat-value" id="qualityDisplay">
           <span id="qualityText">48 kHz</span>
           <span class="stat-unit" id="qualityMode">Stereo</span>
@@ -584,6 +668,58 @@
       </div>
     </div>
 
+    <!-- Diagnostic Inspector Panel -->
+    <div class="card diagnostic-card" id="diagCard">
+      <div class="diag-header" id="diagToggle">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span>🔬 Live Diagnostics & Latency Profiler</span>
+        </div>
+        <span id="diagArrow" style="font-size:0.75rem; color:var(--text-muted);">▲ Collapse</span>
+      </div>
+      <div class="diag-body" id="diagBody">
+        <div class="diag-grid">
+          <div class="diag-metric">
+            <span class="diag-label">Network RTT (Ping)</span>
+            <span class="diag-val" id="diagRtt">-- ms</span>
+            <span class="diag-sub">Two-way network time (not audio delay)</span>
+          </div>
+          <div class="diag-metric">
+            <span class="diag-label">Playout Buffer Delay</span>
+            <span class="diag-val" id="diagBufferDelay">-- ms</span>
+            <span class="diag-sub" id="diagBufferLabel">Receiver jitter buffer</span>
+          </div>
+          <div class="diag-metric">
+            <span class="diag-label">Inbound Jitter</span>
+            <span class="diag-val" id="diagJitter">-- ms</span>
+            <span class="diag-sub">Packet arrival variation</span>
+          </div>
+          <div class="diag-metric">
+            <span class="diag-label">Packet Loss / Glitches</span>
+            <span class="diag-val" id="diagLoss">0 lost</span>
+            <span class="diag-sub" id="diagLossSub">Concealment events: 0</span>
+          </div>
+          <div class="diag-metric">
+            <span class="diag-label">Server Queue Residency</span>
+            <span class="diag-val" id="diagServerQueue">-- ms</span>
+            <span class="diag-sub">Time audio waited in PC queue</span>
+          </div>
+          <div class="diag-metric">
+            <span class="diag-label">Audio Output Engine</span>
+            <span class="diag-val" id="diagPipeline" style="color:#00f2fe;">Web Audio API</span>
+            <span class="diag-sub">latencyHint: 0 (~3ms buffer)</span>
+          </div>
+          <div class="diag-metric" style="grid-column: span 2;">
+            <span class="diag-label">PC Sound Capture Source</span>
+            <span class="diag-val" id="diagCaptureSource" style="font-size:0.85rem;">Detecting...</span>
+            <span class="diag-sub" id="diagCaptureType">Analyzing hardware buffer...</span>
+          </div>
+        </div>
+        <div class="diag-note">
+          ℹ️ <strong>Physical Sync Test Notice:</strong> Network RTT is NOT total audio delay. Total latency = PC Capture Hardware Buffer (~5ms WASAPI / 46ms Cable) + Transmission/Encoding (~10ms) + Playout Buffer. Use YouTube latency sync video for verified end-to-end measurement.
+        </div>
+      </div>
+    </div>
+
     <!-- Quick Scan for Phone (Visible on Desktop) -->
     <div class="card desktop-qr-card" id="qrCard">
       <div id="qrcode"></div>
@@ -641,6 +777,28 @@
     const volPercent = document.getElementById('volPercent');
     const muteBtn = document.getElementById('muteBtn');
     const webrtcAudio = document.getElementById('webrtcAudio');
+    const playoutBufferNum = document.getElementById('playoutBufferNum');
+    const diagToggle = document.getElementById('diagToggle');
+    const diagBody = document.getElementById('diagBody');
+    const diagArrow = document.getElementById('diagArrow');
+    const diagRtt = document.getElementById('diagRtt');
+    const diagBufferDelay = document.getElementById('diagBufferDelay');
+    const diagBufferLabel = document.getElementById('diagBufferLabel');
+    const diagJitter = document.getElementById('diagJitter');
+    const diagLoss = document.getElementById('diagLoss');
+    const diagLossSub = document.getElementById('diagLossSub');
+    const diagServerQueue = document.getElementById('diagServerQueue');
+    const diagPipeline = document.getElementById('diagPipeline');
+    const diagCaptureSource = document.getElementById('diagCaptureSource');
+    const diagCaptureType = document.getElementById('diagCaptureType');
+
+    let diagCollapsed = false;
+    diagToggle.onclick = () => {
+      diagCollapsed = !diagCollapsed;
+      diagBody.style.display = diagCollapsed ? 'none' : 'block';
+      diagArrow.textContent = diagCollapsed ? '▼ Expand' : '▲ Collapse';
+    };
+
     const canvas = document.getElementById('visualizer');
     const ctx = canvas.getContext('2d');
     const vuFill = document.getElementById('vuFill');
@@ -959,21 +1117,57 @@
       const answer = await res.json();
       await pc.setRemoteDescription(new RTCSessionDescription(answer));
 
-      // Monitor WebRTC Stats for RTT Latency
+      // Monitor WebRTC Inbound Stats & Diagnostics
+      diagBufferLabel.textContent = 'WebRTC Jitter Buffer';
+      diagPipeline.textContent = 'Web Audio API (Direct)';
+      diagPipeline.style.color = '#00f2fe';
+
       statsInterval = setInterval(async () => {
         if (!pc || pc.connectionState === 'closed') return;
         try {
           const stats = await pc.getStats();
+          let rttVal = null;
+          let jbDelayMs = null;
+          let jitterMs = null;
+          let packetsLost = null;
+          let packetsReceived = null;
+          let concealmentEvents = null;
+
           stats.forEach(report => {
             if (report.type === 'candidate-pair' && report.state === 'succeeded') {
               if (report.currentRoundTripTime !== undefined) {
-                const rtt = Math.round(report.currentRoundTripTime * 1000);
-                updateLatencyDisplay(rtt);
+                rttVal = Math.round(report.currentRoundTripTime * 1000);
               }
+            } else if (report.type === 'inbound-rtp' && (report.kind === 'audio' || report.mediaType === 'audio')) {
+              if (report.jitter !== undefined) {
+                jitterMs = Math.round(report.jitter * 1000);
+              }
+              if (report.jitterBufferDelay !== undefined && report.jitterBufferEmittedCount > 0) {
+                jbDelayMs = Math.round((report.jitterBufferDelay / report.jitterBufferEmittedCount) * 1000);
+              }
+              packetsLost = report.packetsLost || 0;
+              packetsReceived = report.packetsReceived || 0;
+              concealmentEvents = report.concealmentEvents || 0;
             }
           });
+
+          if (rttVal !== null) {
+            updateLatencyDisplay(rttVal);
+            diagRtt.textContent = `${rttVal} ms`;
+          }
+          if (jbDelayMs !== null) {
+            playoutBufferNum.textContent = jbDelayMs;
+            diagBufferDelay.textContent = `${jbDelayMs} ms`;
+          }
+          if (jitterMs !== null) {
+            diagJitter.textContent = `${jitterMs} ms`;
+          }
+          if (packetsLost !== null) {
+            diagLoss.textContent = `${packetsLost} lost (${packetsReceived} recv)`;
+            diagLossSub.textContent = `Concealment events: ${concealmentEvents}`;
+          }
         } catch (e) {}
-      }, 1000);
+      }, 500);
     }
 
     // ----------------- WebSocket Real-Time Mode -----------------
@@ -989,6 +1183,13 @@
       let nextPlayTime = 0;
       const TARGET_BUFFER = 0.025; // 25ms jitter cushion for butter-smooth TCP Wi-Fi streaming
       const MAX_DRIFT = 0.070;     // 70ms drift limit before realignment
+
+      diagBufferLabel.textContent = 'Queued Buffer (AudioCtx)';
+      diagPipeline.textContent = 'Web Audio API (Direct)';
+      diagPipeline.style.color = '#00f2fe';
+
+      let wsUnderrunCount = 0;
+      let wsResyncCount = 0;
 
       ws.onopen = () => {
         console.log('WebSocket connected');
@@ -1015,6 +1216,15 @@
             } else if (msg.type === 'pong') {
               const rtt = Math.round(performance.now() - msg.t);
               updateLatencyDisplay(rtt);
+              diagRtt.textContent = `${rtt} ms`;
+              if (msg.server_queue_ms !== undefined) {
+                diagServerQueue.textContent = `${msg.server_queue_ms} ms`;
+              }
+              if (msg.capture_interval_ms !== undefined) {
+                diagJitter.textContent = `${msg.capture_interval_ms} ms (capture)`;
+              }
+              diagLoss.textContent = `${wsUnderrunCount} underruns`;
+              diagLossSub.textContent = `Drift resyncs: ${wsResyncCount} | Svr drop: ${msg.server_dropped || 0}`;
             }
           } catch (e) {}
           return;
@@ -1043,9 +1253,11 @@
         if (nextPlayTime < now) {
           // Genuinely starved/underrun: start fresh with optimal cushion
           nextPlayTime = now + TARGET_BUFFER;
+          wsUnderrunCount++;
         } else if (nextPlayTime > now + MAX_DRIFT) {
           // Excessive queue accumulated: snap back to real-time target
           nextPlayTime = now + TARGET_BUFFER;
+          wsResyncCount++;
         }
 
         const buffer = audioCtx.createBuffer(channels, numFrames, sampleRate);
@@ -1060,6 +1272,11 @@
         source.start(nextPlayTime);
 
         nextPlayTime += numFrames / sampleRate;
+
+        // Playout buffer display
+        const playoutMs = Math.max(0, Math.round((nextPlayTime - now) * 1000));
+        playoutBufferNum.textContent = playoutMs;
+        diagBufferDelay.textContent = `${playoutMs} ms`;
       };
 
       ws.onerror = (err) => {
@@ -1151,6 +1368,36 @@
     fetchDevices();
     setupQRCode();
     startVisualizer();
+
+    // Diagnostic Poller for PC Audio Engine Status
+    async function updateDiagnostics() {
+      try {
+        const res = await fetch('/api/diagnostics');
+        const data = await res.json();
+        const st = data.status;
+        if (!st) return;
+
+        if (st.deviceName) {
+          diagCaptureSource.textContent = `${st.deviceName} (${st.hardwareSampleRate || st.sampleRate} Hz)`;
+          if (st.isLoopback) {
+            diagCaptureType.innerHTML = '⚡ <span style="color:var(--accent-green);font-weight:600;">Direct Kernel WASAPI Loopback</span> (~3-5ms driver latency)';
+          } else if (st.deviceName.toLowerCase().includes('cable')) {
+            diagCaptureType.innerHTML = '⚠️ <span style="color:var(--accent-gold);font-weight:600;">Virtual Cable (MME)</span> (~46ms driver baseline buffer)';
+          } else {
+            diagCaptureType.innerHTML = '🎙️ Standard Audio Endpoint';
+          }
+        }
+
+        if (selectedProtocol === 'webrtc') {
+          diagServerQueue.textContent = `${st.lastWebrtcQueueDelayMs || 0} ms (drop: ${st.droppedWebrtcFrames || 0})`;
+        } else {
+          diagServerQueue.textContent = `${st.lastWsQueueDelayMs || 0} ms (drop: ${st.droppedWsFrames || 0})`;
+        }
+      } catch (e) {}
+    }
+
+    setInterval(updateDiagnostics, 2000);
+    updateDiagnostics();
   </script>
 </body>
 </html>

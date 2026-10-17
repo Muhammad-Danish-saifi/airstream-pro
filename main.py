@@ -3,6 +3,7 @@ import logging
 import socket
 import struct
 import re
+import time
 from contextlib import asynccontextmanager
 from typing import Optional
 
@@ -135,6 +136,16 @@ def select_device(req: DeviceSelectRequest):
 def get_status():
     return audio_engine.get_status()
 
+@app.get("/api/diagnostics")
+def get_diagnostics():
+    status = audio_engine.get_status()
+    return {
+        "status": status,
+        "activePeerConnections": len(pcs),
+        "activeWebRTCTracks": len(audio_engine.webrtc_tracks),
+        "activeWebSocketClients": len(audio_engine.websocket_queues)
+    }
+
 # ----------------- WebRTC Low-Latency Endpoint -----------------
 @app.post("/api/webrtc/offer")
 async def webrtc_offer(req: WebRTCOfferRequest):
@@ -171,11 +182,18 @@ async def webrtc_offer(req: WebRTCOfferRequest):
 
     # Inject ultra-low latency Opus SDP fmtp parameters (10ms frames, constant bitrate)
     raw_sdp = pc.localDescription.sdp
-    optimized_sdp = re.sub(
-        r"(a=rtpmap:(\d+)\s+opus/48000/2)",
-        r"\1\r\na=fmtp:\2 minptime=10;ptime=10;maxptime=20;stereo=1;sprop-stereo=1;cbr=1",
-        raw_sdp
-    )
+    if "a=fmtp:" in raw_sdp:
+        optimized_sdp = re.sub(
+            r"a=fmtp:(\d+)[^\r\n]*",
+            r"a=fmtp:\1 minptime=10;ptime=10;maxptime=20;stereo=1;sprop-stereo=1;cbr=1",
+            raw_sdp
+        )
+    else:
+        optimized_sdp = re.sub(
+            r"(a=rtpmap:(\d+)\s+opus/48000/2)",
+            r"\1\r\na=fmtp:\2 minptime=10;ptime=10;maxptime=20;stereo=1;sprop-stereo=1;cbr=1",
+            raw_sdp
+        )
 
     return {
         "sdp": optimized_sdp,
@@ -200,8 +218,13 @@ async def websocket_audio(websocket: WebSocket):
     async def pcm_sender():
         try:
             while True:
-                data = await queue.get()
-                await websocket.send_bytes(data)
+                item = await queue.get()
+                if isinstance(item, tuple):
+                    pcm_bytes, queued_at = item
+                    audio_engine.last_ws_queue_delay_ms = (time.monotonic() - queued_at) * 1000.0
+                else:
+                    pcm_bytes = item
+                await websocket.send_bytes(pcm_bytes)
         except Exception:
             pass
 
@@ -210,7 +233,13 @@ async def websocket_audio(websocket: WebSocket):
             while True:
                 msg = await websocket.receive_json()
                 if msg.get("type") == "ping":
-                    await websocket.send_json({"type": "pong", "t": msg.get("t")})
+                    await websocket.send_json({
+                        "type": "pong",
+                        "t": msg.get("t"),
+                        "server_queue_ms": round(audio_engine.last_ws_queue_delay_ms, 2),
+                        "server_dropped": audio_engine.dropped_ws_frames,
+                        "capture_interval_ms": round(audio_engine.measured_callback_interval_ms, 2)
+                    })
         except Exception:
             pass
 

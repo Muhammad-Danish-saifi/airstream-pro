@@ -2,6 +2,7 @@ import asyncio
 import fractions
 import math
 import logging
+import time
 import numpy as np
 import audioop
 import av
@@ -34,10 +35,19 @@ class PCMAudioStreamTrack(AudioStreamTrack):
         self.channels = engine.channels
         self.chunk_size = engine.chunk_size
         self._silence_frame = b"\x00" * (self.chunk_size * self.channels * 2)
+        self.frames_received = 0
+        self.last_queue_time_ms = 0.0
 
     async def recv(self):
         try:
-            pcm_bytes = await asyncio.wait_for(self.queue.get(), timeout=0.05)
+            item = await asyncio.wait_for(self.queue.get(), timeout=0.05)
+            if isinstance(item, tuple):
+                pcm_bytes, queued_at = item
+                self.last_queue_time_ms = (time.monotonic() - queued_at) * 1000.0
+                self.engine.last_webrtc_queue_delay_ms = self.last_queue_time_ms
+            else:
+                pcm_bytes = item
+            self.frames_received += 1
         except (asyncio.TimeoutError, asyncio.CancelledError):
             pcm_bytes = self._silence_frame
 
@@ -76,6 +86,13 @@ class AudioEngine:
         self.current_rms = 0.0
         self.current_peak = 0.0
         self.total_frames_captured = 0
+        self.is_loopback = False
+        self.dropped_webrtc_frames = 0
+        self.dropped_ws_frames = 0
+        self.last_ws_queue_delay_ms = 0.0
+        self.last_webrtc_queue_delay_ms = 0.0
+        self.last_callback_time = 0.0
+        self.measured_callback_interval_ms = 0.0
 
     def set_loop(self, loop: asyncio.AbstractEventLoop):
         self.loop = loop
@@ -185,6 +202,10 @@ class AudioEngine:
         Hardware PortAudio thread callback.
         Handles real-time rate conversion if device uses 96kHz or 44.1kHz.
         """
+        now = time.monotonic()
+        if self.last_callback_time > 0:
+            self.measured_callback_interval_ms = (now - self.last_callback_time) * 1000.0
+        self.last_callback_time = now
         self.total_frames_captured += 1
 
         # Resample to 48000 Hz if hardware runs at a different native rate
@@ -205,7 +226,7 @@ class AudioEngine:
         except Exception:
             pass
 
-        # Dispatch to asyncio loop thread-safely
+        # Dispatch to asyncio loop thread-safely with monotonic timestamp
         if self.loop and self.loop.is_running():
             self.loop.call_soon_threadsafe(self._dispatch_to_subscribers, in_data)
 
@@ -216,27 +237,32 @@ class AudioEngine:
         Distribute audio bytes to all active subscribers with strictly bounded queues.
         Old frames are discarded if the client is slow, eliminating latency buildup.
         """
+        now = time.monotonic()
+        payload = (pcm_bytes, now)
+
         for track in list(self.webrtc_tracks):
             if track.queue.full():
                 try:
                     track.queue.get_nowait()
+                    self.dropped_webrtc_frames += 1
                 except asyncio.QueueEmpty:
                     pass
             try:
-                track.queue.put_nowait(pcm_bytes)
+                track.queue.put_nowait(payload)
             except asyncio.QueueFull:
-                pass
+                self.dropped_webrtc_frames += 1
 
         for q in list(self.websocket_queues):
             if q.full():
                 try:
                     q.get_nowait()
+                    self.dropped_ws_frames += 1
                 except asyncio.QueueEmpty:
                     pass
             try:
-                q.put_nowait(pcm_bytes)
+                q.put_nowait(payload)
             except asyncio.QueueFull:
-                pass
+                self.dropped_ws_frames += 1
 
         for q in list(self.http_queues):
             if q.full():
@@ -264,6 +290,7 @@ class AudioEngine:
             raw_name = dev_info.get("name", f"Device {self.device_index}")
             self.device_sample_rate = int(dev_info.get("defaultSampleRate", self.sample_rate))
             is_loopback = dev_info.get("isLoopbackDevice", False)
+            self.is_loopback = is_loopback
             if is_loopback:
                 self.device_name = "PC Audio (What You Hear)"
             elif "cable" in raw_name.lower():
@@ -353,16 +380,24 @@ class AudioEngine:
             "isRunning": self.is_running,
             "deviceIndex": self.device_index,
             "deviceName": self.device_name,
+            "isLoopback": getattr(self, "is_loopback", False),
+            "hardwareSampleRate": self.device_sample_rate,
             "sampleRate": self.sample_rate,
             "channels": self.channels,
             "chunkSize": self.chunk_size,
-            "latencyMs": (self.chunk_size / self.sample_rate) * 1000.0,
+            "chunkDurationMs": round((self.chunk_size / self.sample_rate) * 1000.0, 2),
             "peakLevel": round(self.current_peak, 4),
             "rmsLevel": round(self.current_rms, 4),
             "webrtcClients": len(self.webrtc_tracks),
             "websocketClients": len(self.websocket_queues),
             "httpClients": len(self.http_queues),
-            "totalClients": len(self.webrtc_tracks) + len(self.websocket_queues) + len(self.http_queues)
+            "totalClients": len(self.webrtc_tracks) + len(self.websocket_queues) + len(self.http_queues),
+            "totalFramesCaptured": self.total_frames_captured,
+            "droppedWebrtcFrames": self.dropped_webrtc_frames,
+            "droppedWsFrames": self.dropped_ws_frames,
+            "lastWebrtcQueueDelayMs": round(self.last_webrtc_queue_delay_ms, 2),
+            "lastWsQueueDelayMs": round(self.last_ws_queue_delay_ms, 2),
+            "measuredCallbackIntervalMs": round(self.measured_callback_interval_ms, 2)
         }
 
     def shutdown(self):

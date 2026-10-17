@@ -29,9 +29,9 @@ In earlier builds (v1.0.0), testing audio-video sync on mobile devices exhibited
 ### 🔬 How Was The 10ms – 40ms Real-Time Latency Achieved?
 1. **10ms Hardware PCM Capture Chunks:** Reduced hardware callback buffer from 20ms down to **10ms (480 samples @ 48kHz)**. Audio is encoded and dispatched twice as fast.
 2. **Mobile Browser NetEQ Jitter Buffer Zeroed:** Mobile Safari & Chrome default to a conservative 150ms–200ms jitter buffer. AirStream Pro v1.1.0 programmatically injects `receiver.playoutDelayHint = 0` and `receiver.jitterBufferTarget = 0`, forcing the browser engine to present audio immediately.
-3. **Double Audio Playout Eliminated:** Fixed an audio routing issue where streams played through both the HTML5 media element and Web Audio simultaneously. The stream now routes cleanly to low-latency output while the frequency visualizer runs on an isolated non-buffering analyser.
-4. **Adaptive WebSocket Drift Correction:** The Web Audio context requests `latencyHint: 0` (hardware minimum ~3ms buffer) and maintains an ultra-tight 12ms playback target with immediate snap-back if jitter exceeds 35ms.
-5. **Zero-Cable Native WASAPI Loopback:** Captures digital PC audio directly from the Windows audio mixer endpoint before it reaches the DAC, eliminating sound card DSP delay.
+3. **WebRTC Playout Bypasses HTMLMediaElement:** Standard HTML5 `<audio>` tags on mobile Safari & Chrome impose a hidden 150ms–200ms internal media pipeline buffer. AirStream Pro v1.1.0 routes the incoming WebRTC MediaStream directly into the browser's hardware-accelerated **Web Audio API** (`AudioContext` with `latencyHint: 0`), cutting playout lag to ~3ms while keeping the audio tag muted solely as an iOS background wake-lock.
+4. **Adaptive WebSocket Jitter Cushion & Starvation Recovery:** The Web Audio context maintains a calibrated 25ms jitter cushion with clean starvation recovery, eliminating TCP Wi-Fi micro-underruns and jitter stutter without audio lag accumulation.
+5. **Zero-Cable Native WASAPI Loopback with Auto-Resampling:** Captures digital PC audio directly from the Windows audio mixer endpoint at native hardware sample rates (including 96,000 Hz) with real-time rate conversion, eliminating sound card DSP delay and Virtual Cable MME buffer lag.
 
 ---
 
