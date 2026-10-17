@@ -333,7 +333,7 @@ class AudioEngine:
         self.webrtc_tracks.discard(track)
 
     def register_websocket_queue(self):
-        q = asyncio.Queue(maxsize=2)  # Max 20ms buffer (2 x 10ms)
+        q = asyncio.Queue(maxsize=6)  # 60ms headroom to prevent server frame drops on minor network/eventloop jitter
         self.websocket_queues.add(q)
         return q
 

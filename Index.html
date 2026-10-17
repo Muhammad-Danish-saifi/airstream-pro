@@ -980,7 +980,8 @@
       let sampleRate = 48000;
       let channels = 2;
       let nextPlayTime = 0;
-      const TARGET_BUFFER = 0.012; // 12ms ultra-low jitter target (1 frame @ 10ms)
+      const TARGET_BUFFER = 0.025; // 25ms jitter cushion for butter-smooth TCP Wi-Fi streaming
+      const MAX_DRIFT = 0.070;     // 70ms drift limit before realignment
 
       ws.onopen = () => {
         console.log('WebSocket connected');
@@ -1032,11 +1033,11 @@
         }
 
         const now = audioCtx.currentTime;
-        if (nextPlayTime < now + 0.008) {
-          // Reset buffer on startup or underrun
+        if (nextPlayTime < now) {
+          // Genuinely starved/underrun: start fresh with optimal cushion
           nextPlayTime = now + TARGET_BUFFER;
-        } else if (nextPlayTime > now + 0.035) {
-          // Snap back if network jitter queued >35ms
+        } else if (nextPlayTime > now + MAX_DRIFT) {
+          // Excessive queue accumulated: snap back to real-time target
           nextPlayTime = now + TARGET_BUFFER;
         }
 
