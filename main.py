@@ -2,6 +2,7 @@ import asyncio
 import logging
 import socket
 import struct
+import re
 from contextlib import asynccontextmanager
 from typing import Optional
 
@@ -168,8 +169,16 @@ async def webrtc_offer(req: WebRTCOfferRequest):
     answer = await pc.createAnswer()
     await pc.setLocalDescription(answer)
 
+    # Inject ultra-low latency Opus SDP fmtp parameters (10ms frames, constant bitrate)
+    raw_sdp = pc.localDescription.sdp
+    optimized_sdp = re.sub(
+        r"(a=rtpmap:(\d+)\s+opus/48000/2)",
+        r"\1\r\na=fmtp:\2 minptime=10;ptime=10;maxptime=20;stereo=1;sprop-stereo=1;cbr=1",
+        raw_sdp
+    )
+
     return {
-        "sdp": pc.localDescription.sdp,
+        "sdp": optimized_sdp,
         "type": pc.localDescription.type
     }
 

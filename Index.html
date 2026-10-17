@@ -621,6 +621,7 @@
     let animFrame = null;
     let currentVolume = 1.0;
     let isMuted = false;
+    let webrtcSourceNode = null;
 
     // Elements
     const streamBtn = document.getElementById('streamBtn');
@@ -878,7 +879,7 @@
       pc.ontrack = (event) => {
         console.log('WebRTC audio track received');
 
-        // CRITICAL ZERO-LATENCY FIX: Force zero jitter buffer delay in mobile browser NetEQ
+        // Force zero jitter buffer delay in mobile browser NetEQ
         const applyZeroJitter = (receiver) => {
           if (!receiver) return;
           try {
@@ -892,21 +893,27 @@
           pc.getReceivers().forEach(applyZeroJitter);
         }
 
-        // Native low-latency OS playout via WebRTC audio element
-        webrtcAudio.srcObject = event.streams[0];
-        webrtcAudio.volume = Math.min(1.0, currentVolume);
-        webrtcAudio.muted = isMuted;
-        webrtcAudio.play().catch(e => console.warn('WebRTC play deferred:', e));
-
-        // Connect exclusively to analyser for the visualizer (NEVER to destination to prevent duplicate playback & delay)
+        // ULTRA-LOW LATENCY AUDIO PLAYOUT VIA WEB AUDIO API (Bypasses the 150-200ms HTMLMediaElement buffer)
         try {
-          if (audioCtx && analyserNode) {
-            const streamSource = audioCtx.createMediaStreamSource(event.streams[0]);
-            streamSource.connect(analyserNode);
+          if (audioCtx) {
+            if (webrtcSourceNode) {
+              try { webrtcSourceNode.disconnect(); } catch (e) {}
+            }
+            webrtcSourceNode = audioCtx.createMediaStreamSource(event.streams[0]);
+            // Connect to gainNode, which directly feeds audioCtx.destination (sound) and analyserNode (visualizer)
+            webrtcSourceNode.connect(gainNode);
+            console.log('WebRTC audio routed to low-latency WebAudio destination');
           }
         } catch (err) {
-          console.warn('AudioContext stream source:', err);
+          console.warn('AudioContext WebRTC routing fallback:', err);
+          webrtcAudio.muted = isMuted;
+          webrtcAudio.volume = Math.min(1.0, currentVolume);
         }
+
+        // Keep HTML5 audio element MUTED as a background wake-lock for iOS Safari & Android
+        webrtcAudio.srcObject = event.streams[0];
+        webrtcAudio.muted = true; // MUST be muted so it does NOT play with 150ms-200ms HTMLMediaElement delay!
+        webrtcAudio.play().catch(e => console.warn('WebRTC wake-lock play deferred:', e));
       };
 
       pc.onconnectionstatechange = () => {
@@ -1115,6 +1122,10 @@
       if (ws) {
         try { ws.close(); } catch (e) {}
         ws = null;
+      }
+      if (webrtcSourceNode) {
+        try { webrtcSourceNode.disconnect(); } catch (e) {}
+        webrtcSourceNode = null;
       }
       if (webrtcAudio) {
         webrtcAudio.pause();
