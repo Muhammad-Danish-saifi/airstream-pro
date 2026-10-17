@@ -21,14 +21,14 @@ logging.basicConfig(level=logging.INFO)
 class PCMAudioStreamTrack(AudioStreamTrack):
     """
     WebRTC Audio Track that streams captured PCM audio frames encoded to Opus.
-    Uses a small bounded queue to guarantee strictly zero latency accumulation.
+    Uses a minimal queue (maxsize=2) to guarantee strictly zero latency accumulation.
     """
     kind = "audio"
 
     def __init__(self, engine):
         super().__init__()
         self.engine = engine
-        self.queue = asyncio.Queue(maxsize=4)  # Max 80ms buffer (4 x 20ms)
+        self.queue = asyncio.Queue(maxsize=2)  # Max 20ms buffer (2 x 10ms)
         self._timestamp = 0
         self.sample_rate = engine.sample_rate
         self.channels = engine.channels
@@ -37,7 +37,7 @@ class PCMAudioStreamTrack(AudioStreamTrack):
 
     async def recv(self):
         try:
-            pcm_bytes = await asyncio.wait_for(self.queue.get(), timeout=0.1)
+            pcm_bytes = await asyncio.wait_for(self.queue.get(), timeout=0.05)
         except (asyncio.TimeoutError, asyncio.CancelledError):
             pcm_bytes = self._silence_frame
 
@@ -55,10 +55,10 @@ class PCMAudioStreamTrack(AudioStreamTrack):
 
 
 class AudioEngine:
-    def __init__(self, sample_rate: int = 48000, channels: int = 2, chunk_size: int = 960):
+    def __init__(self, sample_rate: int = 48000, channels: int = 2, chunk_size: int = 480):
         self.sample_rate = sample_rate  # Target output rate (48 kHz)
         self.channels = channels        # Target channels (2 stereo)
-        self.chunk_size = chunk_size    # 960 samples @ 48kHz = 20.0 ms
+        self.chunk_size = chunk_size    # 480 samples @ 48kHz = exactly 10.0 ms
 
         self.p = pyaudio.PyAudio()
         self.stream = None
@@ -252,7 +252,7 @@ class AudioEngine:
     def start(self, device_index: int = None, sample_rate: int = 48000, channels: int = 2):
         self.sample_rate = sample_rate
         self.channels = channels
-        self.chunk_size = int(self.sample_rate * 0.02)  # 960 samples @ 48kHz = 20ms
+        self.chunk_size = int(self.sample_rate * 0.010)  # 480 samples @ 48kHz = 10ms ultra-low latency
         self._ratecv_state = None
 
         if device_index is None:
@@ -276,8 +276,8 @@ class AudioEngine:
             self.device_name = f"Device {self.device_index}"
             self.device_sample_rate = self.sample_rate
 
-        # Buffer frames according to hardware sample rate (20ms)
-        hardware_chunk = int(self.device_sample_rate * 0.02)
+        # Buffer frames according to hardware sample rate (10ms)
+        hardware_chunk = int(self.device_sample_rate * 0.010)
 
         logger.info(f"Starting AudioEngine on device [{self.device_index}] '{self.device_name}' "
                     f"at hardware {self.device_sample_rate}Hz -> output {self.sample_rate}Hz {self.channels}ch")
@@ -295,6 +295,7 @@ class AudioEngine:
             self.stream.start_stream()
             self.is_running = True
             logger.info("Audio capture stream started successfully.")
+            return True, "Audio capture stream started successfully."
         except Exception as e:
             logger.warning(f"Failed to open stream on device {self.device_index}: {e}")
             # If the loopback device failed (e.g. no audio playing yet), auto-fallback to Stereo Mix or Cable
@@ -332,7 +333,7 @@ class AudioEngine:
         self.webrtc_tracks.discard(track)
 
     def register_websocket_queue(self):
-        q = asyncio.Queue(maxsize=4)
+        q = asyncio.Queue(maxsize=2)  # Max 20ms buffer (2 x 10ms)
         self.websocket_queues.add(q)
         return q
 

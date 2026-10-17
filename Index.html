@@ -694,24 +694,25 @@
       }
     };
 
-    // Initialize Web Audio Context
+    // Initialize Web Audio Context with ultra-low hardware latency
     function initWebAudio() {
       if (!audioCtx) {
         const AudioContextClass = window.AudioContext || window.webkitAudioContext;
         audioCtx = new AudioContextClass({
-          latencyHint: 'interactive',
+          latencyHint: 0, // Lowest possible hardware audio buffer (typically 3-5ms)
           sampleRate: 48000
         });
 
+        // Master Output Gain for WebSocket audio
         gainNode = audioCtx.createGain();
         gainNode.gain.setValueAtTime(isMuted ? 0 : currentVolume, audioCtx.currentTime);
+        gainNode.connect(audioCtx.destination);
 
+        // Visualizer Analyser (receives signal without sending duplicate audio to destination)
         analyserNode = audioCtx.createAnalyser();
         analyserNode.fftSize = 64;
         analyserNode.smoothingTimeConstant = 0.8;
-
         gainNode.connect(analyserNode);
-        analyserNode.connect(audioCtx.destination);
       }
       if (audioCtx.state === 'suspended') {
         audioCtx.resume();
@@ -876,15 +877,32 @@
 
       pc.ontrack = (event) => {
         console.log('WebRTC audio track received');
+
+        // CRITICAL ZERO-LATENCY FIX: Force zero jitter buffer delay in mobile browser NetEQ
+        const applyZeroJitter = (receiver) => {
+          if (!receiver) return;
+          try {
+            if ('playoutDelayHint' in receiver) receiver.playoutDelayHint = 0;
+            if ('jitterBufferTarget' in receiver) receiver.jitterBufferTarget = 0;
+          } catch (e) {}
+        };
+
+        applyZeroJitter(event.receiver);
+        if (pc.getReceivers) {
+          pc.getReceivers().forEach(applyZeroJitter);
+        }
+
+        // Native low-latency OS playout via WebRTC audio element
         webrtcAudio.srcObject = event.streams[0];
         webrtcAudio.volume = Math.min(1.0, currentVolume);
         webrtcAudio.muted = isMuted;
         webrtcAudio.play().catch(e => console.warn('WebRTC play deferred:', e));
 
+        // Connect exclusively to analyser for the visualizer (NEVER to destination to prevent duplicate playback & delay)
         try {
-          if (audioCtx) {
+          if (audioCtx && analyserNode) {
             const streamSource = audioCtx.createMediaStreamSource(event.streams[0]);
-            streamSource.connect(gainNode);
+            streamSource.connect(analyserNode);
           }
         } catch (err) {
           console.warn('AudioContext stream source:', err);
@@ -962,7 +980,7 @@
       let sampleRate = 48000;
       let channels = 2;
       let nextPlayTime = 0;
-      const TARGET_BUFFER = 0.030; // 30ms ultra-low jitter target
+      const TARGET_BUFFER = 0.012; // 12ms ultra-low jitter target (1 frame @ 10ms)
 
       ws.onopen = () => {
         console.log('WebSocket connected');
@@ -1014,11 +1032,11 @@
         }
 
         const now = audioCtx.currentTime;
-        if (nextPlayTime < now + 0.012) {
+        if (nextPlayTime < now + 0.008) {
           // Reset buffer on startup or underrun
           nextPlayTime = now + TARGET_BUFFER;
-        } else if (nextPlayTime > now + 0.080) {
-          // Snap back if network jitter queued >80ms
+        } else if (nextPlayTime > now + 0.035) {
+          // Snap back if network jitter queued >35ms
           nextPlayTime = now + TARGET_BUFFER;
         }
 

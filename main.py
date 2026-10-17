@@ -25,8 +25,8 @@ if sys.stderr is None:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("server")
 
-# Initialize Audio Engine
-audio_engine = AudioEngine(sample_rate=48000, channels=2, chunk_size=960)
+# Initialize Audio Engine with 10ms chunk size (480 samples @ 48kHz)
+audio_engine = AudioEngine(sample_rate=48000, channels=2, chunk_size=480)
 
 # Set of active WebRTC peer connections
 pcs = set()
@@ -52,7 +52,9 @@ async def lifespan(app: FastAPI):
     audio_engine.set_loop(loop)
 
     # Start audio capture
-    started, msg = audio_engine.start()
+    res = audio_engine.start()
+    started = res[0] if isinstance(res, tuple) else bool(res)
+    msg = res[1] if isinstance(res, tuple) and len(res) > 1 else str(res)
     if started:
         logger.info(f"Audio engine started: {msg}")
     else:
